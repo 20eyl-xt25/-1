@@ -1,0 +1,1492 @@
+<!DOCTYPE html>
+<!--
+  文件: 官网2.html
+  说明: 带有粒子、视差背景和自定义光标的演示页面。
+  下面为文件内所有主要部分添加了注释，便于阅读与维护，未改变原有行为。
+-->
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EYL的官网</title>
+    <style>
+        /* ===== 全局变量 & 颜色定义 ===== */
+        :root {
+            /* 主题色系：用于统一页面配色 */
+            --primary-dark: #0f0524;
+            --primary-mid: #1a0933;
+            --primary-light: #2c1252;
+            --brand-accent: #9D7BF4; /* 品牌强调色 */
+        }
+        
+        /* ===== 基础布局 ===== */
+        body {
+            margin: 0; /* 去除默认页面外边距 */
+            font-family: 'Arial', sans-serif; /* 基础字体 */
+            color: white; /* 默认文字颜色 */
+            overflow-x: hidden; /* 防止水平滚动条 */
+            /* 渐变背景作为降级/备用背景（当图片未加载时可见） */
+            background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary-mid) 50%, var(--primary-light) 100%);
+            cursor: none; /* 隐藏系统光标（配合自定义光标使用） */
+        }
+
+        /* 示例按钮（页面中部分调试按钮会用到） */
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 15px 32px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 4px 2px;
+            cursor: pointer; /* 鼠标悬停显示手型 */
+        }
+
+        /* 全局：禁止选中文本（包含各浏览器前缀） */
+        html, body, * {
+            -webkit-user-select: none; /* Chrome, Safari, Opera */
+            -moz-user-select: none;    /* Firefox */
+            -ms-user-select: none;     /* IE/Edge */
+            user-select: none;         /* 标准 */
+        }
+
+        /* ===== FPS 监控面板样式 ===== */
+        /* 用于显示当前帧率，颜色会根据帧率变化 */
+        .fps-monitor {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.6);
+            color: #00ff00; /* 默认绿表示流畅 */
+            font-family: monospace;
+            padding: 8px 12px;
+            border-radius: 4px;
+            z-index: 1000; /* 保持在最上层 */
+            font-size: 14px;
+            box-shadow: 0 0 10px rgba(0, 255, 0, 0.3);
+        }
+
+        /* ===== 居中水印（只做提示/视觉效果） ===== */
+        .watermark {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: rgba(255, 255, 255, 0.2);
+            font-size: 2.5rem;
+            font-weight: bold;
+            pointer-events: none; /* 不拦截交互 */
+            z-index: 999;
+            text-align: center;
+            white-space: nowrap;
+            user-select: none; /* 禁止选中文本 */
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+            animation: watermark-pulse 8s infinite ease-in-out; /* 呼吸动画 */
+        }
+
+        @keyframes watermark-pulse {
+            0%, 100% { opacity: 0.15; }
+            50% { opacity: 0.25; }
+        }
+
+        /* ===== 背景容器：用于展示图片/视差/粒子 ===== */
+        .bg-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1; /* 背景放置在后面 */
+            /* 默认改为渐变色背景，图片仍会在 JS 加载成功后替换 */
+            background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary-mid) 50%, var(--primary-light) 100%);
+            background-size: cover;
+            background-position: center center;
+            /* 在移动端避免 fixed 背景带来的性能问题；若需要视差可在 JS 中控制 */
+        }
+
+        /* 半透明遮罩，改善文字可读性 */
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.4);
+        }
+
+        /* 品牌光晕层，增强视觉层次 */
+        .brand-glow {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 100vw;
+            height: 100vh;
+            transform: translate(-50%, -50%);
+            background: radial-gradient(circle at center, rgba(125,85,255,0.15) 0%, transparent 60%);
+            pointer-events: none;
+        }
+
+        /* 页面主内容容器（空的 main 用作占位） */
+        .content {
+            position: relative;
+            min-height: 50vh;
+            padding: 1rem;
+            padding-top: 100px; /* 为 header 留出空间 */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        /* ===== 侧边内容卡片 ===== */
+        .content-box.c {
+            position: fixed; /* 固定定位，随页面滚动不动 */
+            left: 69px;
+            top: 35%;
+            transform: translateY(-50%);
+            width: 300px;
+            background: rgba(15, 5, 36, 0.85);
+            border-radius: 16px;
+            padding: 25px;
+            backdrop-filter: blur(10px); /* 背景模糊效果 */
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(157, 123, 244, 0.2);
+            transition: all 0.3s ease;
+            z-index: 50;
+            cursor: pointer; /* 点击整张卡片会打开链接 */
+        }
+
+        /* 中央展示卡片（使用类 .p） */
+        .content-box.p {
+            position: fixed;
+            left: 50%;
+            top: 35%;
+            transform: translate(-50%, -50%);
+            width: 300px;
+            background: rgba(15, 5, 36, 0.85);
+            border-radius: 16px;
+            padding: 25px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(157, 123, 244, 0.2);
+            transition: all 0.3s ease;
+            z-index: 50;
+            cursor: pointer;
+        }
+
+        /* 右侧展示卡片（使用类 .a） */
+        .content-box.a {
+            position: fixed;
+            left: 82%;
+            top: 35%;
+            transform: translate(-50%, -50%);
+            width: 300px;
+            background: rgba(15, 5, 36, 0.85);
+            border-radius: 16px;
+            padding: 25px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(157, 123, 244, 0.2);
+            transition: all 0.3s ease;
+            z-index: 50;
+            cursor: pointer;
+        }
+
+        /* 卡片 Hover 效果（放大和高光边框） */
+        .content-box:hover {
+            transform: translateY(-50%) scale(1.05);
+            box-shadow: 0 12px 40px rgba(157, 123, 244, 0.3);
+            border-color: rgba(157, 123, 244, 0.4);
+        }
+
+        /* 专门为中间卡片 (.content-box.p) 定制的悬停效果：
+           - 保持居中位置（相对 transform 的第一项）
+           - 在垂直方向上略微上移并放大
+           - 增强发光阴影和边框高亮，突出中间卡片
+        */
+        .content-box.p:hover {
+            transform: translate(-50%, -50%) scale(1.07); /* 轻微上移并放大 */
+            box-shadow: 0 20px 50px rgba(157, 123, 244, 0.45), 0 6px 24px rgba(0,0,0,0.35);
+            border-color: rgba(157, 123, 244, 0.65);
+            transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+        }
+         
+        .content-box.a:hover {
+            transform: translate(-50%, -50%) scale(1.07); /* 轻微上移并放大 */
+            box-shadow: 0 20px 50px rgba(157, 123, 244, 0.45), 0 6px 24px rgba(0,0,0,0.35);
+            border-color: rgba(157, 123, 244, 0.65);
+            transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+        }
+
+        .content-box h2 {
+            color: var(--brand-accent);
+            font-size: 1.8rem;
+            margin-top: 0;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        .content-box p {
+            font-size: 1rem;
+            line-height: 1.6;
+            margin-bottom: 20px;
+        }
+
+        /* ===== 右下角按钮组 ===== */
+        .btn-container {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            z-index: 50;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            background: rgba(162, 129, 245, 0.8);
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(157, 123, 244, 0.3);
+        }
+
+        .btn:hover {
+            background: rgb(167, 135, 248);
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(157, 123, 244, 0.5);
+        }
+
+        .btn.secondary {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .btn.secondary:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        /* ===== 公告栏样式（左下角，固定显示） =====
+           - 固定在左下角，始终显示（不可关闭）
+           - 在公告内部右下角显示发布者信息
+        */
+        .announcement {
+            position: fixed;
+            left: 75px;
+            bottom: 100px;
+            width: 300px;
+            max-width: calc(100% - 80px);
+            background: rgba(20, 10, 40, 0.95);
+            color: #fff;
+            /* 加大内边距以改善可读性（为更大字体留出空间） */
+            padding: 18px 22px 56px 14px;
+            border-radius: 13px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.5), 0 2px 8px rgba(157,123,244,0.12);
+            border: 1px solid rgba(157,123,244,0.12);
+            z-index: 2000;
+            transform: translateY(0);
+            opacity: 1;
+            transition: none;
+            backdrop-filter: blur(10px);
+            display: block;
+        }
+
+        /* 实时日期时间显示（位于公告上方） */
+        .site-time {
+            position: fixed;
+            left: 100px;
+            bottom: 350px; /* 在公告上方显示，距离公告保持间距 */
+            width: 260px;
+            max-width: calc(100% - 80px);
+            background: rgba(18, 10, 36, 0.85);
+            color: #fff;
+            padding: 10px 14px;
+            border-radius: 10px;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.45);
+            border: 1px solid rgba(154, 121, 240, 0.08);
+            z-index: 2100;
+            font-size: 1rem;
+            text-align: left;
+            line-height: 1.3;
+            backdrop-filter: blur(6px);
+            user-select: none;
+        }
+
+        /* 左下角：上次更新时间，仅在桌面显示（移动端通过 .mobile 或媒体查询隐藏） */
+        .last-updated {
+            position: fixed;
+            left: 128px;
+            bottom: 300px;
+            background: rgba(10, 6, 22, 0.7);
+            color: #fff;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            z-index: 2200;
+            backdrop-filter: blur(6px);
+            pointer-events: none;
+            opacity: 0.95;
+        }
+
+        /* 右下角：实时网络状态（仅在桌面显示） */
+        .net-status {
+            position: fixed;
+            bottom: 300px;
+            right: 300px; /* 放置在右下按钮左侧的空闲处 */
+            background: rgba(8,6,20,0.72);
+            color: #fff;
+            padding: 33px 24px;
+            border-radius: 40px;
+            font-size: 0.95rem;
+            z-index: 80; /* 低于右下角按钮 (z-index:50) */
+            backdrop-filter: blur(6px);
+            pointer-events: none; /* 不阻塞点击 */
+            opacity: 0.98;
+            text-align: center;
+            min-width: 72px;
+        }
+
+        /* 页面底部版权与备案说明（随文档流，显示在页面最下方） */
+        .site-footer {
+            position: relative; /* 随内容流，不固定 */
+            display: block;
+            width: 100%;
+            text-align: center;
+            color: rgba(255,255,255,0.9);
+            font-size: 0.9rem;
+            padding: 12px 16px;
+            background: rgba(0,0,0,0.18);
+            z-index: 20;
+            pointer-events: auto;
+        }
+
+        .site-footer a { color: rgba(255,255,255,0.9); text-decoration: underline; pointer-events: auto; }
+
+        @media (max-width: 768px) {
+            .site-footer { font-size: 0.88rem; padding: 10px 12px; }
+        }
+
+        /* 桌面端：把版权备案固定在窗口底部（不覆盖右下角按钮） */
+        @media (min-width: 769px) {
+            .site-footer {
+                position: fixed;
+                left: 0;
+                right: 0;
+                bottom: 12px; /* 靠近底部 */
+                z-index: 30; /* 低于右下角按钮 (z-index:50) */
+                background: rgba(0,0,0,0.22);
+            }
+        }
+
+
+        .announcement .ann-icon {
+            min-width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            background: linear-gradient(135deg, rgba(157,123,244,0.2), rgba(98,81,209,0.15));
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: var(--brand-accent);
+            flex-shrink: 0;
+            margin-right: 10px;
+        }
+
+        .announcement .ann-body {
+            font-size: 1.12rem; /* 放大正文字体以提高可读性 */
+            line-height: 1.45;
+            margin-right: 58px; /* 为右下角的发布者留出更大空间 */
+        }
+
+        .announcement .ann-title {
+            font-weight: 800;
+            color: var(--brand-accent);
+            margin-bottom: 6px;
+            font-size: 1.18rem; /* 增大标题 */
+            line-height: 1.2;
+        }
+
+        /* 发布者显示在公告的右下角 */
+        .announcement .ann-publisher {
+            position: absolute;
+            right: 12px;
+            bottom: 10px;
+            font-size: 0.96rem; /* 略微放大发布者显示 */
+            color: rgba(255,255,255,0.85);
+        }
+
+        /* ===== 更新公告弹窗样式 ===== */
+        .update-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+
+        .update-modal-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .update-modal {
+            background: rgba(20, 10, 40, 0.95);
+            border-radius: 16px;
+            padding: 30px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(157, 123, 244, 0.3);
+            backdrop-filter: blur(10px);
+            transform: translateY(20px);
+            transition: transform 0.3s ease;
+            position: relative;
+        }
+
+        .update-modal-overlay.active .update-modal {
+            transform: translateY(0);
+        }
+
+        .update-modal-close {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: none;
+            border: none;
+            color: var(--brand-accent);
+            font-size: 1.5rem;
+            cursor: pointer;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: background-color 0.2s ease;
+        }
+
+        .update-modal-close:hover {
+            background-color: rgba(157, 123, 244, 0.2);
+        }
+
+        .update-modal-title {
+            color: var(--brand-accent);
+            font-size: 1.5rem;
+            margin-top: 0;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .update-modal-content {
+            font-size: 1.1rem;
+            line-height: 1.6;
+            margin-bottom: 25px;
+            text-align: center;
+        }
+
+        .update-modal-actions {
+            display: flex;
+            justify-content: center;
+        }
+
+        .update-modal-btn {
+            padding: 10px 25px;
+            background: var(--brand-accent);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .update-modal-btn:hover {
+            background: rgb(167, 135, 248);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 10px rgba(157, 123, 244, 0.4);
+        }
+
+        /* ===== 响应式规则（不同屏幕宽度下的样式调整） ===== */
+        @media (max-width: 2000px) {
+            .content-box {
+                width: 250px;
+                padding: 20px;
+            }
+            
+            .watermark {
+                font-size: 2rem;
+            }
+        }
+
+        @media (max-width: 992px) {
+            /* 中等及以下宽度时，将卡片改为流式布局 */
+            .content-box {
+                position: relative;
+                left: auto;
+                top: auto;
+                transform: none;
+                width: 40%;
+                margin: 4px auto;
+                order: -1;
+            }
+            
+            .content-box:hover {
+                transform: scale(1.03);
+            }
+            
+            .watermark {
+                font-size: 1.8rem;
+            }
+        }
+
+        @media (max-width: 768px) {
+            /* 移动端优化 */
+            .bg-container {
+                background-position: 60% center;
+            }
+            
+            .brand-glow {
+                background-size: 150% 150%;
+            }
+            
+            .content {
+                padding-top: 100px;
+            }
+            
+            body {
+                cursor: default; /* 移动端恢复系统光标 */
+            }
+            
+            .fps-monitor {
+                font-size: 12px;
+                padding: 5px 8px;
+            }
+            
+            .content-box {
+                width: 50%;
+                padding: 15px;
+            }
+            
+            .content-box h2 {
+                font-size: 1.5rem;
+            }
+            
+            .watermark {
+                font-size: 1.5rem;
+                white-space: normal;
+                width: 80%;
+            }
+            
+            .btn-container {
+                bottom: 20px;
+                right: 20px;
+            }
+            
+            .btn {
+                padding: 10px 20px;
+                font-size: 14px;
+            }
+            
+            /* 公告栏在小屏幕时缩小字体和宽度，避免遮挡 */
+            .announcement {
+                left: 12px;
+                bottom: 12px;
+                width: calc(100% - 40px);
+                padding: 12px 12px 55px 10px;
+            }
+
+            /* 手机端隐藏上次更新时间 */
+            .last-updated { display: none !important; }
+
+            .announcement .ann-body {
+                font-size: 0.95rem;
+                margin-right: 40px;
+            }
+
+            .announcement .ann-title {
+                font-size: 1.02rem;
+            }
+
+            .announcement .ann-publisher {
+                font-size: 0.86rem;
+                right: 8px;
+                bottom: 4px;
+            }
+
+            /* 移动端更新弹窗调整 */
+            .update-modal {
+                padding: 20px;
+                width: 85%;
+            }
+
+            .update-modal-title {
+                font-size: 1.3rem;
+            }
+
+            .update-modal-content {
+                font-size: 1rem;
+            }
+        }
+
+        /* 粒子画布（particles.js 使用的容器） */
+        #particles-js {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+        }
+
+        /* 固定标题栏：页面顶部的 header 区域 */
+        header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 95%;
+            max-width: 100% !important;
+            margin: 0 auto !important;
+            padding: 1.5rem 2rem !important;
+            background: rgba(15, 5, 36, 0.85);
+            border-radius: 0 0 16px 16px !important;
+            backdrop-filter: blur(10px);
+            z-index: 100;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            animation: fadeInDown 0.8s both;
+        }
+
+        h1 {
+            color: var(--brand-accent);
+            font-size: 2.5rem;
+            text-align: center;
+            margin: 0;
+        }
+
+        header p {
+            text-align: center;
+            margin: 0.5rem 0 0;
+        }
+
+        /* 自定义光标（用一个小元素模拟鼠标） */
+        .custom-cursor {
+            position: fixed;
+            width: 20px;
+            height: 20px;
+            border-radius: 40%;
+            background: rgba(157, 123, 244, 0.5);
+            pointer-events: none; /* 不拦截任何事件 */
+            z-index: 9999;
+            transform: translate(-50%, -50%);
+            mix-blend-mode: screen;
+            transition: transform 0.1s ease;
+        }
+
+        /* 标题栏下滑入场动画（简单） */
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 3;
+                transform: translateY(0);
+            }
+        }
+
+        /* 移动端标题调整 */
+        @media (max-width: 768px) {
+            header {
+                padding: 1rem !important;
+            }
+            h1 {
+                font-size: 1.8rem !important;
+            }
+        }
+
+        /* ===== 针对 JS 检测到的移动端类 .mobile 的样式覆盖 ===== */
+        :root.mobile .custom-cursor,
+        html.mobile .custom-cursor,
+        body.mobile .custom-cursor {
+            display: none !important; /* 隐藏自定义光标，使用系统光标 */
+        }
+
+        :root.mobile body,
+        html.mobile body,
+        body.mobile {
+            cursor: default; /* 恢复系统光标 */
+        }
+
+        /* 手机端隐藏 FPS 面板，减少占用 */
+        .mobile .fps-monitor { display: none !important; }
+
+        /* 手机端使卡片为流式布局，便于触控操作 */
+        .mobile .content-box,
+        .mobile .content-box.c,
+        .mobile .content-box.p,
+        .mobile .content-box.a {
+            position: relative !important;
+            left: auto !important;
+            top: auto !important;
+            transform: none !important;
+            width: 80% !important;
+            margin: 50px auto !important; /* 进一步缩小卡片之间的垂直间距 */
+            margin-top: 70px !important; /* 减小首卡顶部下移以减少空白 */
+            box-shadow: none !important;
+            backdrop-filter: none !important;
+        }
+
+        /* 手机端进一步调整卡片内部：减小标题与正文字体、压缩内边距以节省空间 */
+        .mobile .content-box h2 {
+            font-size: 1.0rem !important; /* 从 1.8rem 缩小 */
+            margin-bottom: 2px !important;
+        }
+
+        .mobile .content-box p {
+            font-size: 0.92rem !important; /* 正文字体轻微缩小 */
+            line-height: 1.45 !important;
+            margin-bottom: 30px !important;
+        }
+
+        .mobile .content-box {
+            padding: 10px !important; /* 缩小内边距 */
+            border-radius: 10px !important;
+        }
+
+        /* 如果设备非常窄，进一步减小字体和间距（极小屏优化） */
+        @media (max-width: 360px) {
+            .mobile .content-box h2 { font-size: 1.05rem !important; }
+            .mobile .content-box p  { font-size: 0.85rem !important; }
+            .mobile .site-time { font-size: 0.9rem !important; }
+            .mobile .content-box { margin-top: 80px !important; }
+        }
+
+        /* 手机端调整时间和公告的位置与大小 */
+        .mobile .site-time {
+            left: 10px !important;
+            bottom: 150px !important;
+            width: calc(90% - 5px) !important;
+            font-size: 0.95rem !important;
+        }
+
+        .mobile .announcement {
+            left: 10px !important;
+            bottom: 20px !important;
+            width: calc(100% - 40px) !important;
+            padding: 9px 12px 40px 12px !important;
+            border-radius: 10px !important;
+        }
+
+        /* 手机端降低粒子显示优先级或可选择隐藏 */
+        .mobile #particles-js { opacity: 0.6; pointer-events: none; }
+
+        /* 额外移动端 UI 优化 */
+        /* 隐藏居中水印以减少干扰 */
+        .mobile .watermark { display: none !important; }
+
+        /* 移动端专属壁纸
+           - 当页面处于 .mobile 状态或屏幕窄时，使用更适合手机的壁纸
+           - 使用较小/压缩图并禁用 background-attachment:fixed（移动端卡顿）
+        */
+        .mobile .bg-container {
+            background-image: url('https://haowallpaper.com/link/common/file/previewFileImg/15053501456354624') !important;
+            background-size: cover !important;
+            background-position: center center !important;
+            background-repeat: no-repeat !important;
+            background-attachment: scroll !important; /* 避免移动端固定背景卡顿 */
+        }
+
+        @media (max-width: 768px) {
+            /* 兼容在未及时添加 .mobile 类的窄屏环境 */
+            .bg-container {
+                background-image: url('https://haowallpaper.com/link/common/file/previewFileImg/15053501456354624') !important;
+                background-size: cover !important;
+                background-position: center center !important;
+                background-attachment: scroll !important;
+            }
+        }
+
+        /* 缩短 header，占用更少垂直空间 */
+        .mobile header {
+            padding: 0.9rem 1rem !important;
+            border-radius: 0 0 10px 10px !important;
+        }
+        .mobile header h1 { font-size: 1.4rem !important; }
+        .mobile header p { display: none !important; }
+
+        /* 移动端：把按钮组放回右下角，竖向排列并靠右对齐 */
+        .mobile .btn-container {
+            bottom: 12px !important;
+            right: 12px !important;
+            top: auto !important;
+            left: auto !important;
+            flex-direction: column !important;
+            gap: 8px !important;
+                z-index: 12000 !important; /* 提升 z-index，确保置顶 */
+            align-items: flex-end !important;
+        }
+        .mobile .btn-container .btn {
+            display: inline-block !important;
+            width: auto !important;
+            padding: 10px 14px !important;
+            font-size: 15px !important;
+        }
+        /* 若需要单列铺满，添加 .full-btn 到元素上 */
+        .mobile .btn.full-btn { width: 50% !important; }
+
+        /* 主内容顶部留白，避免与固定 header 重叠 */
+        .mobile .content { padding-top: 140px !important; }
+
+        /* 卡片内的小按钮在移动端放在底部并占满宽度，便于触控 */
+        .mobile .content-box .card-btn {
+            position: relative !important;
+            right: auto !important;
+            bottom: auto !important;
+            display: block !important;
+            width: 100% !important;
+            margin-top: 10px !important;
+            text-align: center !important;
+        }
+
+        /* 在非常窄的手机上改回单列按钮（防止并排挤压） */
+        @media (max-width: 420px) {
+            .mobile .btn-container { flex-direction: column !important; bottom: calc(12px + env(safe-area-inset-bottom, 12px)) !important; right: calc(12px + env(safe-area-inset-right, 12px)) !important; align-items: stretch !important; position: fixed !important; z-index: 12000 !important; }
+            .mobile .btn-container .btn { width: 100% !important; }
+        }
+    </style>
+</head>
+<body>
+    <!-- FPS 监控面板：由脚本实时写入帧率数值并改变颜色 -->
+    <div class="fps-monitor" id="fpsMonitor">FPS: --</div>
+    
+    <!-- 居中水印文本，说明页面用途 -->
+    <div class="watermark">当前网页仅供测试参考和学习，不代表最终品质</div>
+    
+    <!-- 自定义光标元素：脚本会跟随鼠标移动位置 -->
+    <div class="custom-cursor"></div>
+    
+    <!-- 更新公告弹窗 -->
+    <div class="update-modal-overlay" id="updateModal">
+        <div class="update-modal">
+            <button class="update-modal-close" id="closeUpdateModal">&times;</button>
+            <h2 class="update-modal-title">更新公告</h2>
+            <div class="update-modal-content">
+                对于维护期间给您带来的不便，我们深表歉意。感谢您的理解与支持！
+            </div>
+            <div class="update-modal-actions">
+                <button class="update-modal-btn" id="confirmUpdateModal">我知道了</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 背景系统容器：包含遮罩、品牌光效与粒子画布 -->
+    <div class="bg-container">
+        <div class="overlay"></div>
+        <div class="brand-glow"></div>
+        <div id="particles-js"></div>
+    </div>
+
+    <!-- 固定标题栏（header） -->
+    <header>
+        <h1>欢迎来到EYL的官网</h1>
+        <p>让破解学习机「触手可及」</p>
+    </header>
+
+    <!-- 右下角按钮组（外部链接） -->
+    <div class="btn-container">
+        <a href="https://wwwx.qyshare.com/s/tool" class="btn">XT工具箱</a>
+        <a href="https://pd.qq.com/s/cbuwxefhw?b=9" class="btn secondary">频道咨询</a>
+    </div>
+    <!-- 右下角实时网络状态（桌面显示） -->
+    <div class="net-status" id="netStatus" aria-hidden="true">当前网络状态: —</div>
+
+    <!-- 左侧与中间的内容卡片（可点击跳转） -->
+    <div class="content-box c" id="contentBox">
+        <h2>BYT的官网</h2>
+        <p>欢迎来到我的小屋，这里是我分享游戏心得和资源的地方。</p>
+        <p>在这里，你可以找到各种刷机的攻略、工具和资源，希望能对你有所帮助！</p>
+    </div>
+
+    <div class="content-box p" id="contentBoxLove">
+        <h2>落樱🌸残風的小屋</h2>
+        <p>欢迎来到我的小屋，这里是我分享游戏心得和资源的地方。</p>
+        <p>在这里，你可以找到各种刷机的攻略、工具和资源，希望能对你有所帮助！</p>
+    </div>
+
+    <div class="content-box a" id="contentBoxlike">
+        <h2>逆光源的小屋</h2>
+        <p>欢迎来到我的小屋，这里是我分享游戏心得和资源的地方。</p>
+        <p>在这里，你可以找到各种刷机的攻略、工具和资源，希望能对你有所帮助！</p>
+    </div>
+
+    <!-- 主内容占位（当前未放置大量内容） -->
+    <main class="content"></main>
+
+    <!-- 左下角公告栏：固定显示并在右下角显示发布者 -->
+    <!-- 实时时间显示（公告上方） -->
+    <div class="site-time" id="siteTime">正在加载时间...</div>
+    <div class="announcement" id="siteAnnouncement" aria-live="polite" role="status">
+        <div style="display:flex; align-items:flex-start; gap: 15px;">
+            <div class="ann-icon">公告</div>
+            <div class="ann-body">
+                <div class="ann-title">网站公告</div>
+                <div class="ann-text">祝大家国庆节快乐！
+                    注意：
+                    1. 本网站所有内容均为个人分享，不代表官方立场。
+                    2. 请遵守相关法律法规，不进行任何形式的 illegal 等违法犯罪活动！
+                </div>
+            </div>
+        </div>
+        <div class="ann-publisher">发布者:EYL</div>
+    </div>
+    <!-- 左下角：上次更新时间（仅桌面显示） -->
+    <div class="last-updated" id="lastUpdated" aria-hidden="true">上次更新：加载中…</div>
+
+    <!-- 页面底部版权与备案说明（将被移动到文档末尾） -->
+
+    <!-- 按需加载粒子库，仅桌面端加载 -->
+    <script>
+// 填充左下角"上次更新时间"文本（仅桌面显示，移动端会被样式隐藏）
+(function populateLastUpdated(){
+    function setText(t){
+        const el = document.getElementById('lastUpdated');
+        if(el) el.textContent = '上次更新：' + t;
+    }
+
+    document.addEventListener('DOMContentLoaded', function(){
+        const el = document.getElementById('lastUpdated');
+        if(!el) return;
+
+        // 优先使用 document.lastModified
+        try{
+            const lm = document.lastModified;
+            if(lm && lm !== '0' && lm !== ''){
+                const d = new Date(lm);
+                if(!isNaN(d.getTime())){
+                    setText(d.toLocaleString());
+                    return;
+                }
+            }
+        }catch(e){ /* ignore */ }
+
+        // 如果页面通过 http(s) 提供，尝试 HEAD 请求读取 Last-Modified
+        if(location.protocol.startsWith('http')){
+            fetch(location.href, { method: 'HEAD', cache: 'no-store' }).then(function(resp){
+                const hdr = resp.headers.get('last-modified');
+                if(hdr){
+                    const d = new Date(hdr);
+                    if(!isNaN(d.getTime())){
+                        setText(d.toLocaleString());
+                        return;
+                    }
+                }
+                setText(new Date().toLocaleString());
+            }).catch(function(){
+                setText(new Date().toLocaleString());
+            });
+        }else{
+            // file:// 或其他协议，回退使用当前时间
+            setText(new Date().toLocaleString());
+        }
+    });
+})();
+
+// 设置版权年份
+(function setCopyrightYear(){
+    document.addEventListener('DOMContentLoaded', function(){
+        var y = new Date().getFullYear();
+        var el = document.getElementById('copyYear');
+        if(el) el.textContent = y;
+    });
+})();
+
+function isDesktop() {
+  var ua = navigator.userAgent;
+  return !(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua) || window.innerWidth <= 768);
+}
+function loadParticlesJs(callback) {
+  var s = document.createElement('script');
+  s.src = 'https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js';
+  s.onload = callback;
+  document.head.appendChild(s);
+}
+// 为 particles.js 提供统一的初始化逻辑，并包含自适应与交互处理
+function initParticles() {
+    // 动态计算粒子数量，根据设备与性能调整
+    const getParticleCount = () => {
+        const isMobile = window.innerWidth < 768;
+        const isLowPerfDevice = (navigator.hardwareConcurrency || 4) < 4 || (navigator.deviceMemory || 4) < 4;
+        if (isMobile) return isLowPerfDevice ? 30 : 60;
+        return isLowPerfDevice ? 80 : 120;
+    };
+
+    // 基础配置，粒子数量使用 getParticleCount()
+        particlesJS('particles-js', {
+            particles: {
+                number: { value: getParticleCount(), density: { enable: true, value_area: 800 } },
+                color: { value: ["#9D7BF4", "#6251D1", "#3A25A3"] },
+                shape: { type: "circle", stroke: { width: 0, color: "#000000" } },
+                opacity: { value: 0.7, random: true, anim: { enable: true, speed: 1, opacity_min: 0.2, sync: false } },
+                size: { value: 4, random: true, anim: { enable: true, speed: 3, size_min: 1, sync: false } },
+                line_linked: { enable: true, distance: 90, color: "#9D7BF4", opacity: 0.4, width: 1.5 },
+                move: { enable: true, speed: 2, direction: "none", random: true, straight: false, out_mode: "out", bounce: false, attract: { enable: true, rotateX: 600, rotateY: 1200 } }
+            },
+            interactivity: {
+                detect_on: "window",
+                events: { onhover: { enable: true, mode: "repulse" }, onclick: { enable: true, mode: "push" }, resize: true },
+                modes: { repulse: { distance: 100, duration: 0.4 }, push: { particles_nb: 8 }, bubble: { distance: 400, size: 40, duration: 2, opacity: 8, speed: 3 }, grab: { distance: 200, line_linked: { opacity: 0.8 } } }
+            },
+            retina_detect: true
+        });
+
+    // 鼠标/触摸位置注入（提高交互性）
+    const updateParticlePosition = (e) => {
+        try {
+            if (window.pJSDom && window.pJSDom[0]) {
+                const pJS = window.pJSDom[0].pJS;
+                pJS.interactivity.mouse.pos_x = e.clientX;
+                pJS.interactivity.mouse.pos_y = e.clientY;
+            }
+        } catch (e) { /* ignore */ }
+    };
+    document.addEventListener('mousemove', updateParticlePosition);
+    document.addEventListener('touchmove', (e) => { if(e.touches && e.touches[0]) updateParticlePosition(e.touches[0]); });
+
+    // 窗口大小变化时延迟更新粒子数量，避免频繁刷新
+    let resizeTimeout;
+    window.addEventListener('resize', () => {
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(() => {
+            try {
+                const pJS = window.pJSDom && window.pJSDom[0] && window.pJSDom[0].pJS;
+                if (pJS) {
+                    pJS.particles.number.value = getParticleCount();
+                    // 在低端设备上可能希望关闭连线以减轻渲染
+                    if (window.innerWidth < 768 && pJS.particles.line_linked) pJS.particles.line_linked.enable = false;
+                    pJS.fn.particlesRefresh();
+                }
+            } catch (e) { /* ignore */ }
+        }, 400);
+    });
+
+    // 本地开发环境显示简单控制（仅 localhost）
+    const addParticleControls = () => {
+        if (!(window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) return;
+        try {
+            const controls = document.createElement('div');
+            controls.style.position = 'fixed';
+            controls.style.bottom = '10px';
+            controls.style.right = '10px';
+            controls.style.zIndex = '1000';
+            controls.style.background = 'rgba(0,0,0,0.7)';
+            controls.style.padding = '8px';
+            controls.style.borderRadius = '4px';
+            controls.style.color = 'white';
+            controls.innerHTML = `\n        <div>粒子控制:</div>\n        <button onclick="if(window.pJSDom && window.pJSDom[0]){window.pJSDom[0].pJS.particles.array.length = 0}">清除所有粒子</button>\n        <button onclick="if(window.pJSDom && window.pJSDom[0]){window.pJSDom[0].pJS.fn.particlesRefresh()}">重置粒子</button>\n      `;
+            document.body.appendChild(controls);
+        } catch(e){ /* ignore */ }
+    };
+    addParticleControls();
+}
+if (isDesktop()) {
+  document.addEventListener('DOMContentLoaded', function() {
+    loadParticlesJs(initParticles);
+  });
+}
+    </script>
+    <script>
+        /* ===== FPS 监控逻辑 =====
+           - 统计帧数并每秒更新一次显示
+           - 根据 FPS 改变文字颜色（红/黄/绿）
+        */
+        (function() {
+            const fpsMonitor = document.getElementById('fpsMonitor');
+            let frameCount = 0;
+            let lastTime = performance.now();
+            let fps = 0;
+            
+            function updateFPS() {
+                frameCount++;
+                const now = performance.now();
+                const delta = now - lastTime;
+                
+                // 每隔 ~1000ms 计算一次 FPS 并更新显示
+                if (delta >= 1000) {
+                    fps = Math.round((frameCount * 1000) / delta);
+                    fpsMonitor.textContent = `FPS: ${fps}`;
+                    frameCount = 0;
+                    lastTime = now;
+                    
+                    // 根据 FPS 值设置颜色，便于快速定位性能问题
+                    if (fps < 30) {
+                        fpsMonitor.style.color = '#ff0000';
+                    } else if (fps < 50) {
+                        fpsMonitor.style.color = '#ffff00';
+                    } else {
+                        fpsMonitor.style.color = '#00ff00';
+                    }
+                }
+                
+                requestAnimationFrame(updateFPS);
+            }
+            
+            // 启动 FPS 计数循环
+            requestAnimationFrame(updateFPS);
+        })();
+
+        /* ===== 自定义光标：元素随鼠标移动 ===== */
+        const cursor = document.querySelector('.custom-cursor');
+        document.addEventListener('mousemove', (e) => {
+            // 直接设置元素位置，保持视觉与真实鼠标对齐
+            cursor.style.left = e.clientX + 'px';
+            cursor.style.top = e.clientY + 'px';
+        });
+        
+        /* ===== 内容卡片点击事件（打开新窗口） ===== */
+        document.getElementById('contentBox').addEventListener('click', function() {
+            // 示例跳转：可替换为真实目标 URL
+            window.open('https://900.cool/aaa/index.html', '_blank');
+        });
+
+        document.getElementById('contentBoxLove').addEventListener('click', function() {
+            // 示例跳转：可替换为真实目标 URL
+            window.open('https://lycfqwq.wordpress.com/', '_blank');
+        });
+
+                document.getElementById('contentBoxlike').addEventListener('click', function() {
+            // 示例跳转：可替换为真实目标 URL
+            window.open('https://www.nghbl.vip', '_blank');
+        });
+
+        /* ===== 初始化粒子系统（particles.js） =====
+           - 根据设备性能与屏幕尺寸，动态调整粒子数量
+           - 注册鼠标/触摸事件来增强交互体验
+        */
+        /* 已将 particles.js 的完整初始化/自适应逻辑合并至上方的 initParticles()，避免重复初始化 */
+
+        /* ===== 图片加载优化 =====
+           - 在 window.onload 时预加载备用背景图并在加载完成后替换
+           - 可在移动端改用更小或 WebP 格式的图片
+        */
+        window.onload = function() {
+            const bgContainer = document.querySelector('.bg-container');
+            const img = new Image();
+            img.src = 'https://haowallpaper.com/link/common/file/previewFileImg/15894790976818560';
+            img.onload = function() {
+                // 加载成功后把背景图替换为更合适的图片资源
+                bgContainer.style.backgroundImage = 'url(' + img.src + ')';
+                
+                if (window.innerWidth < 768) {
+                    // 移动端可替换为 WebP 或压缩版以节省流量
+                    // bgContainer.style.backgroundImage = 'url(optimized-image.webp)';
+                }
+            };
+        };
+
+        /* ===== 性能自适应：低帧率时减少粒子数量并提示 ===== */
+        const fpsMonitor = document.getElementById('fpsMonitor');
+        let lowFPSWarningShown = false;
+        
+        setInterval(() => {
+            // 读取 FPS 文本并解析数字（防御性：确保存在数字）
+            const fpsText = fpsMonitor.textContent || '';
+            const match = fpsText.match(/\d+/);
+            if (!match) return;
+            const fps = parseInt(match[0]);
+            
+            if (fps < 25 && !lowFPSWarningShown && window.pJSDom) {
+                lowFPSWarningShown = true;
+                const pJS = window.pJSDom[0].pJS;
+                // 将粒子数量减少为当前的 70% 以减轻渲染压力
+                pJS.particles.number.value = Math.floor(pJS.particles.number.value * 0.7);
+                pJS.fn.particlesRefresh();
+                
+                // 页面提示用户当前已做自动降配
+                const warning = document.createElement('div');
+                warning.textContent = '检测到低帧率，已减少粒子数量';
+                warning.style.position = 'fixed';
+                warning.style.bottom = '60px';
+                warning.style.right = '10px';
+                warning.style.background = 'rgba(255,0,0,0.7)';
+                warning.style.padding = '8px';
+                warning.style.borderRadius = '4px';
+                warning.style.color = 'white';
+                warning.style.zIndex = '1000';
+                document.body.appendChild(warning);
+                
+                setTimeout(() => {
+                    document.body.removeChild(warning);
+                }, 3000);
+            }
+        }, 2000);
+
+    /* 公告栏为固定显示，不再需要关闭逻辑或 localStorage */
+    </script>
+    <script>
+        // 每秒更新页面左下角的实时时间显示（含年份、日期、时间，中文格式）
+        (function() {
+            const timeEl = document.getElementById('siteTime');
+            if (!timeEl) return;
+
+            function pad(n) { return n < 10 ? '0' + n : n; }
+
+            function updateTime() {
+                const now = new Date();
+                const year = now.getFullYear();
+                const month = pad(now.getMonth() + 1);
+                const day = pad(now.getDate());
+                const hours = pad(now.getHours());
+                const minutes = pad(now.getMinutes());
+                const seconds = pad(now.getSeconds());
+
+                // 中文友好的格式：2025年09月07日 14:23:45
+                timeEl.textContent = `当前时间:${year}年${month}月${day}日 ${hours}:${minutes}:${seconds}`;
+            }
+
+            updateTime();
+            setInterval(updateTime, 1000);
+        })();
+    </script>
+    <script>
+        // 自动检测手机/桌面并切换 UI：为 <html> 添加或移除 .mobile 类
+        (function() {
+            const ua = navigator.userAgent || navigator.vendor || window.opera;
+
+            function isMobileUA() {
+                return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua) || window.innerWidth <= 768;
+            }
+
+            function applyMobileClass(enable) {
+                const html = document.documentElement;
+                if (enable) {
+                    html.classList.add('mobile');
+                    document.body.classList.add('mobile');
+                } else {
+                    html.classList.remove('mobile');
+                    document.body.classList.remove('mobile');
+                }
+            }
+
+            function adjustForMobile() {
+                const mobile = isMobileUA();
+                applyMobileClass(mobile);
+
+                // 额外对已初始化的 particles.js 做降配
+                try {
+                    const pJS = window.pJSDom && window.pJSDom[0] && window.pJSDom[0].pJS;
+                    if (pJS) {
+                        if (mobile) {
+                            pJS.particles.number.value = 30;
+                            if (pJS.particles.line_linked) pJS.particles.line_linked.enable = false;
+                            pJS.fn.particlesRefresh();
+                        } else {
+                            pJS.particles.number.value = 120;
+                            if (pJS.particles.line_linked) pJS.particles.line_linked.enable = true;
+                            pJS.fn.particlesRefresh();
+                        }
+                    }
+                } catch (e) { /* 忽略 */ }
+
+                // 根据 mobile 状态调整一些 DOM 可见性（防止样式表延迟）
+                const fps = document.getElementById('fpsMonitor');
+                const cursor = document.querySelector('.custom-cursor');
+                if (fps) fps.style.display = mobile ? 'none' : '';
+                if (cursor) cursor.style.display = mobile ? 'none' : '';
+            }
+
+            // 初始运行并在 resize 时防抖执行
+            function init() {
+                adjustForMobile();
+                let t;
+                window.addEventListener('resize', () => {
+                    clearTimeout(t);
+                    t = setTimeout(adjustForMobile, 200);
+                });
+            }
+
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', init);
+            } else {
+                init();
+            }
+        })();
+    </script>
+    <script>
+        // 实时网络状态显示：使用 /ping.txt 测量 RTT（中位数滤波），并在公告右侧垂直居中显示（仅桌面）
+        (function(){
+            const el = document.getElementById('netStatus');
+            const ann = document.getElementById('siteAnnouncement');
+            if(!el) return;
+
+            let intervalId = null;
+            const samples = []; // 存放最近 RTT 样本
+            const MAX_SAMPLES = 5;
+            let lastSuccessTime = null;
+
+            function median(arr){
+                if(!arr.length) return null;
+                const s = arr.slice().sort((a,b)=>a-b);
+                const mid = Math.floor(s.length/2);
+                return s.length%2 ? s[mid] : Math.round((s[mid-1]+s[mid])/2);
+            }
+
+            function formatTime(ts){
+                const d = new Date(ts);
+                const Y = d.getFullYear();
+                const M = String(d.getMonth()+1).padStart(2,'0');
+                const D = String(d.getDate()).padStart(2,'0');
+                const h = String(d.getHours()).padStart(2,'0');
+                const m = String(d.getMinutes()).padStart(2,'0');
+                const s = String(d.getSeconds()).padStart(2,'0');
+                return `${Y}-${M}-${D} ${h}:${m}:${s}`;
+            }
+
+            // 尝试用 /ping.txt（更可靠），若失败再退回 /favicon.ico
+            function fetchPingResource(){
+                const base = window.location.origin || (window.location.protocol + '//' + window.location.host);
+                return [base + '/ping.txt', base + '/favicon.ico'];
+            }
+
+            function measureOnce(){
+                if(!navigator.onLine){
+                    el.textContent = '离线';
+                    el.title = '网络离线';
+                    return Promise.resolve();
+                }
+                const resources = fetchPingResource();
+                let tried = 0;
+
+                function tryUrl(url){
+                    tried++;
+                    const start = performance.now();
+                    return fetch(url + '?_t=' + Date.now(), { method: 'GET', cache: 'no-store' }).then(function(resp){
+                        const rtt = Math.round(performance.now() - start);
+                        if(resp.ok){
+                            // 保存样本并限制长度
+                            samples.push(rtt);
+                            if(samples.length > MAX_SAMPLES) samples.shift();
+                            lastSuccessTime = Date.now();
+                            const med = median(samples);
+                            el.textContent = '在线: ' + med + 'ms';
+                            el.title = '上次成功: ' + formatTime(lastSuccessTime) + '\n样本中位数: ' + med + 'ms';
+                            return Promise.resolve();
+                        }
+                        // 若失败且还有备用资源，继续尝试
+                        if(tried < resources.length) return tryUrl(resources[tried]);
+                        el.textContent = '网络: ?';
+                        return Promise.resolve();
+                    }).catch(function(){
+                        if(tried < resources.length) return tryUrl(resources[tried]);
+                        el.textContent = '网络错误';
+                        el.title = '请求失败';
+                        return Promise.resolve();
+                    });
+                }
+
+                return tryUrl(resources[0]);
+            }
+
+            function updatePosition(){
+                // 将 net-status 放在公告右侧并垂直居中于公告
+                if(!ann) return;
+                const annRect = ann.getBoundingClientRect();
+                const netRect = el.getBoundingClientRect();
+                const spacing = 12; // 间距
+                let left = Math.round(annRect.right + spacing);
+                // 限制不覆盖右下按钮（保留 140px 右侧安全区）
+                const maxLeft = window.innerWidth - netRect.width - 140;
+                if(left > maxLeft) left = Math.max(annRect.left + annRect.width + spacing, maxLeft);
+                if(left < 10) left = 10;
+                el.style.left = left + 'px';
+                // 垂直居中并向上偏移（向上移动，单位 px）
+                const verticalOffset = -150; // 负值表示向上移动，可按需调整
+                const top = Math.round(annRect.top + (annRect.height - netRect.height)/2 + verticalOffset);
+                el.style.bottom = 'auto';
+                el.style.top = (top >= 8 ? top : 8) + 'px';
+            }
+
+            function start(){
+                measureOnce();
+                if(intervalId) clearInterval(intervalId);
+                intervalId = setInterval(measureOnce, 5000);
+                updatePosition();
+            }
+
+            function stop(){
+                if(intervalId){ clearInterval(intervalId); intervalId = null; }
+            }
+
+            function isDesktop() { return window.innerWidth > 768 && !/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent); }
+
+            window.addEventListener('online', start);
+            window.addEventListener('offline', function(){ el.textContent = '离线'; el.title = '网络离线'; stop(); });
+            document.addEventListener('visibilitychange', function(){ if(document.visibilityState === 'visible') start(); else stop(); });
+
+            window.addEventListener('resize', function(){
+                if(isDesktop()){ el.style.display = 'block'; if(!intervalId) start(); updatePosition(); } else { el.style.display = 'none'; stop(); }
+            });
+
+            // 初始行为
+            if(isDesktop()){ el.style.display = 'block'; start(); } else { el.style.display = 'none'; }
+
+            // 观察公告尺寸变化（如果公告内容更新），及时重新定位
+            try{
+                const ro = new ResizeObserver(() => { if(isDesktop()) updatePosition(); });
+                if(ann) ro.observe(ann);
+            }catch(e){ /* ResizeObserver 在旧环境可能不存在，忽略 */ }
+        })();
+    </script>
+    <script>
+        // 更新公告弹窗控制
+        (function() {
+            const modal = document.getElementById('updateModal');
+            const closeBtn = document.getElementById('closeUpdateModal');
+            const confirmBtn = document.getElementById('confirmUpdateModal');
+            
+            // 检查是否已经关闭过弹窗
+            const updateModalClosed = localStorage.getItem('updateModalClosed');
+            
+            // 如果未关闭过，显示弹窗
+            if (!updateModalClosed) {
+                setTimeout(() => {
+                    modal.classList.add('active');
+                }, 1000); // 延迟1秒显示，让页面先加载
+            }
+            
+            // 关闭弹窗函数
+            function closeModal() {
+                modal.classList.remove('active');
+                localStorage.setItem('updateModalClosed', 'true');
+            }
+            
+            // 绑定关闭事件
+            if (closeBtn) closeBtn.addEventListener('click', closeModal);
+            if (confirmBtn) confirmBtn.addEventListener('click', closeModal);
+            
+            // 点击遮罩层也可以关闭
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) closeModal();
+            });
+        })();
+    </script>
+    <!-- 页面底部版权与备案说明（文档流底部） -->
+    <footer class="site-footer" role="contentinfo">
+        <div>
+            © <span id="copyYear"></span> EYL 版权所有 &nbsp;|&nbsp;
+            <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">京ICP证030173号</a>
+            &nbsp;|&nbsp;
+            <a href="http://www.beian.gov.cn/" target="_blank" rel="noopener noreferrer">京公网安备11000002000001号</a>
+        </div>
+    </footer>
+</body>
+</html>
